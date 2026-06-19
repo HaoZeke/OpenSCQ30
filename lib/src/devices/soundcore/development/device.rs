@@ -169,8 +169,7 @@ impl OpenSCQ30Device for SoundcoreDevelopmentDevice {
 
                 self.packet_io
                     .send_with_response(&packet::Outbound::new(command, body))
-                    .await
-                    .unwrap();
+                    .await?;
             }
         }
 
@@ -182,4 +181,45 @@ impl OpenSCQ30Device for SoundcoreDevelopmentDevice {
 enum DevelopmentDeviceError {
     #[error("data length must be at least 2, since the first 2 bytes are used as the command")]
     MissingCommand,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use macaddr::MacAddr6;
+    use tokio::sync::mpsc;
+
+    use crate::{
+        api::{
+            device::{Error, OpenSCQ30DeviceRegistry},
+            settings::{SettingId, Value},
+        },
+        connection_backend::mock::rfcomm::MockRfcommBackend,
+    };
+
+    use super::SoundcoreDevelopmentDeviceRegistry;
+
+    #[tokio::test(start_paused = true)]
+    async fn send_packet_timeout_returns_error() {
+        let (_inbound_sender, inbound_receiver) = mpsc::channel(100);
+        let (outbound_sender, _outbound_receiver) = mpsc::channel(100);
+        let registry = SoundcoreDevelopmentDeviceRegistry::new(Arc::new(MockRfcommBackend::new(
+            inbound_receiver,
+            outbound_sender,
+        )));
+        let device = registry.connect(MacAddr6::nil()).await.unwrap();
+
+        let error = device
+            .set_setting_values(vec![(SettingId::SendPacket, Value::from("1,131,1"))])
+            .await
+            .expect_err("sendPacket should return the packet timeout error");
+
+        assert!(matches!(
+            error,
+            Error::ActionTimedOut {
+                action: "resending packet until ack received"
+            }
+        ));
+    }
 }
