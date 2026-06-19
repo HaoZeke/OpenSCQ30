@@ -1,4 +1,7 @@
-use std::{panic::Location, sync::Arc};
+use std::{
+    panic::Location,
+    sync::{Arc, Mutex},
+};
 
 use async_trait::async_trait;
 use macaddr::MacAddr6;
@@ -67,7 +70,7 @@ impl OpenSCQ30DeviceRegistry for SoundcoreDevelopmentDeviceRegistry {
 pub struct SoundcoreDevelopmentDevice {
     packet_io: PacketIOController,
     backend: Arc<dyn RfcommConnection + Send + Sync>,
-    state_update_packet: Option<packet::Inbound>,
+    state_update_packet: Mutex<Option<packet::Inbound>>,
     changes_signal: watch::Sender<()>,
 }
 
@@ -82,7 +85,7 @@ impl SoundcoreDevelopmentDevice {
         Ok(Self {
             packet_io,
             backend: connection,
-            state_update_packet,
+            state_update_packet: Mutex::new(state_update_packet),
             changes_signal: watch::channel(()).0,
         })
     }
@@ -113,7 +116,7 @@ impl OpenSCQ30Device for SoundcoreDevelopmentDevice {
     fn setting(&self, setting_id: &SettingId) -> Option<Setting> {
         match setting_id {
             SettingId::StateUpdatePacket => {
-                let text = format!("{:?}", self.state_update_packet);
+                let text = format!("{:?}", self.state_update_packet.lock().unwrap());
                 Some(Setting::Information {
                     value: text.to_owned(),
                     translated_value: text,
@@ -167,9 +170,12 @@ impl OpenSCQ30Device for SoundcoreDevelopmentDevice {
                 let body = data.split_off(2);
                 let command = Command(data.try_into().unwrap());
 
-                self.packet_io
+                let response = self
+                    .packet_io
                     .send_with_response(&packet::Outbound::new(command, body))
                     .await?;
+                *self.state_update_packet.lock().unwrap() = Some(response);
+                let _ = self.changes_signal.send(());
             }
         }
 
@@ -196,6 +202,10 @@ mod tests {
             settings::{SettingId, Value},
         },
         connection_backend::mock::rfcomm::MockRfcommBackend,
+        devices::soundcore::common::packet::{
+            self, ChecksumKind, Command,
+            outbound::RequestState,
+        },
     };
 
     use super::SoundcoreDevelopmentDeviceRegistry;
@@ -221,5 +231,55 @@ mod tests {
                 action: "resending packet until ack received"
             }
         ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn send_packet_updates_displayed_development_response() {
+        let (inbound_sender, inbound_receiver) = mpsc::channel(100);
+        let (outbound_sender, mut outbound_receiver) = mpsc::channel(100);
+        inbound_sender
+            .send(
+                packet::Inbound::new(RequestState::COMMAND, vec![0x00])
+                    .bytes(ChecksumKind::Suffix),
+            )
+            .await
+            .unwrap();
+        let registry = SoundcoreDevelopmentDeviceRegistry::new(Arc::new(MockRfcommBackend::new(
+            inbound_receiver,
+            outbound_sender,
+        )));
+        let device = registry.connect(MacAddr6::nil()).await.unwrap();
+        outbound_receiver.recv().await.unwrap();
+
+        let set_handle = tokio::spawn({
+            let device = device.clone();
+            async move {
+                device
+                    .set_setting_values(vec![(
+                        SettingId::SendPacket,
+                        Value::from("0x20,0x81,0x01"),
+                    )])
+                    .await
+                    .unwrap();
+            }
+        });
+        outbound_receiver.recv().await.unwrap();
+        inbound_sender
+            .send(
+                packet::Inbound::new(Command([0x20, 0x81]), vec![0xab, 0xcd])
+                    .bytes(ChecksumKind::Suffix),
+            )
+            .await
+            .unwrap();
+
+        set_handle.await.unwrap();
+
+        let setting = device.setting(&SettingId::StateUpdatePacket).unwrap();
+        let text = match setting {
+            crate::api::settings::Setting::Information { value, .. } => value,
+            _ => panic!("stateUpdatePacket should be information"),
+        };
+        assert!(text.contains("Command([32, 129])"));
+        assert!(text.contains("body: [171, 205]"));
     }
 }
