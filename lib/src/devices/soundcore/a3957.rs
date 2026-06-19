@@ -156,7 +156,7 @@ mod tests {
             device::{SoundcoreDeviceConfig, test_utils::TestSoundcoreDevice},
             packet,
         },
-        settings::{SettingId, Value},
+        settings::{Setting, SettingId, Value},
     };
 
     #[tokio::test(start_paused = true)]
@@ -269,5 +269,15 @@ mod tests {
             (SettingId::BatteryLevelRight, "10/10".into()),
             (SettingId::CaseBatteryLevel, "10/10".into()),
         ]);
+
+        let noise_canceling_mode = device
+            .inner()
+            .setting(&SettingId::NoiseCancelingMode)
+            .unwrap();
+        let Setting::Select { setting, value } = noise_canceling_mode else {
+            panic!("noiseCancelingMode should be a select setting")
+        };
+        assert_eq!(value, "Adaptive");
+        assert!(setting.options.iter().any(|option| option == "Adaptive"));
     }
 }

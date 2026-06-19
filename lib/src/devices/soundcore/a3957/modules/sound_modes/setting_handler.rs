@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 use crate::{
     api::settings::{self, Setting, SettingId, Value},
     devices::soundcore::{
-        a3957::structures::{ManualNoiseCanceling, NoiseCancelingMode, SoundModes},
+        a3957::structures::{ManualNoiseCanceling, SoundModes},
         common::settings_manager::{SettingHandler, SettingHandlerError, SettingHandlerResult},
     },
     i18n::fl,
@@ -35,11 +35,7 @@ where
             SoundModeSetting::TransparencyMode => Some(Setting::select_from_enum_all_variants(
                 sound_modes.transparency_mode,
             )),
-            SoundModeSetting::NoiseCancelingMode => Some(Setting::select_from_enum(
-                &[
-                    NoiseCancelingMode::Manual,
-                    NoiseCancelingMode::Transportation,
-                ],
+            SoundModeSetting::NoiseCancelingMode => Some(Setting::select_from_enum_all_variants(
                 sound_modes.noise_canceling_mode,
             )),
             SoundModeSetting::ManualNoiseCanceling => Some(Setting::I32Range {
