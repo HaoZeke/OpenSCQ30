@@ -50,10 +50,10 @@ soundcore_device!(
             builder.d1204_sound_modes();
         } else {
             builder.a3957_sound_modes();
+            builder
+                .equalizer_with_custom_hear_id_tws(equalizer::common_settings())
+                .await;
         }
-        builder
-            .equalizer_with_custom_hear_id_tws(equalizer::common_settings())
-            .await;
         if !is_d1204 {
             builder.button_configuration(&BUTTON_CONFIGURATION_SETTINGS);
             builder.ambient_sound_mode_cycle();
@@ -401,6 +401,12 @@ mod tests {
             SettingId::TransportationMode,
             SettingId::WindNoiseSuppression,
             SettingId::WindNoiseDetected,
+            SettingId::PresetEqualizerProfile,
+            SettingId::CustomEqualizerProfile,
+            SettingId::VolumeAdjustments,
+            SettingId::ImportCustomEqualizerProfiles,
+            SettingId::ExportCustomEqualizerProfiles,
+            SettingId::ExportCustomEqualizerProfilesOutput,
         ] {
             assert!(
                 device.inner().setting(&setting_id).is_none(),
