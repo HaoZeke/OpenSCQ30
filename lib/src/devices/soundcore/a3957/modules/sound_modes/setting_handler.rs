@@ -15,6 +15,7 @@ use super::SoundModeSetting;
 
 #[derive(Default)]
 pub struct SoundModesSettingHandler;
+pub struct D1204SoundModesSettingHandler;
 
 #[async_trait]
 impl<T> SettingHandler<T> for SoundModesSettingHandler
@@ -98,6 +99,61 @@ where
                 let sound_modes: &mut SoundModes = state.get_mut();
                 sound_modes.transportation_mode = value.try_as_enum_variant()?;
             }
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<T> SettingHandler<T> for D1204SoundModesSettingHandler
+where
+    T: Has<SoundModes> + Send,
+{
+    fn settings(&self) -> Vec<SettingId> {
+        vec![
+            SettingId::AmbientSoundMode,
+            SettingId::TransparencyMode,
+            SettingId::NoiseCancelingMode,
+        ]
+    }
+
+    fn get(&self, state: &T, setting_id: &SettingId) -> Option<Setting> {
+        let sound_modes: &SoundModes = state.get();
+        match setting_id {
+            SettingId::AmbientSoundMode => Some(Setting::select_from_enum_all_variants(
+                sound_modes.ambient_sound_mode,
+            )),
+            SettingId::TransparencyMode => Some(Setting::select_from_enum_all_variants(
+                sound_modes.transparency_mode,
+            )),
+            SettingId::NoiseCancelingMode => {
+                let value = sound_modes.noise_canceling_mode.to_string();
+                Some(Setting::Information {
+                    value: value.clone(),
+                    translated_value: value,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    async fn set(
+        &self,
+        state: &mut T,
+        setting_id: &SettingId,
+        value: Value,
+    ) -> SettingHandlerResult<()> {
+        match setting_id {
+            SettingId::AmbientSoundMode => {
+                let sound_modes: &mut SoundModes = state.get_mut();
+                sound_modes.ambient_sound_mode = value.try_as_enum_variant()?;
+            }
+            SettingId::TransparencyMode => {
+                let sound_modes: &mut SoundModes = state.get_mut();
+                sound_modes.transparency_mode = value.try_as_enum_variant()?;
+            }
+            SettingId::NoiseCancelingMode => return Err(SettingHandlerError::ReadOnly),
+            _ => return Err(SettingHandlerError::MissingData),
         }
         Ok(())
     }

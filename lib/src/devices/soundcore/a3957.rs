@@ -46,7 +46,11 @@ soundcore_device!(
         let is_d1204 = builder.device_model() == crate::devices::DeviceModel::SoundcoreD1204;
 
         builder.module_collection().add_state_update();
-        builder.a3957_sound_modes();
+        if is_d1204 {
+            builder.d1204_sound_modes();
+        } else {
+            builder.a3957_sound_modes();
+        }
         builder
             .equalizer_with_custom_hear_id_tws(equalizer::common_settings())
             .await;
@@ -306,11 +310,10 @@ mod tests {
             .inner()
             .setting(&SettingId::NoiseCancelingMode)
             .unwrap();
-        let Setting::Select { setting, value } = noise_canceling_mode else {
-            panic!("noiseCancelingMode should be a select setting")
+        let Setting::Information { value, .. } = noise_canceling_mode else {
+            panic!("D1204 noiseCancelingMode should be read-only information")
         };
         assert_eq!(value, "Adaptive");
-        assert!(setting.options.iter().any(|option| option == "Adaptive"));
     }
 
     #[tokio::test(start_paused = true)]
@@ -338,12 +341,17 @@ mod tests {
             (SettingId::AmbientSoundMode, "Normal".into()),
             (SettingId::TransparencyMode, "VocalMode".into()),
             (SettingId::NoiseCancelingMode, "Adaptive".into()),
-            (SettingId::ManualNoiseCanceling, 1.into()),
             (SettingId::AutoPowerOff, "30m".into()),
             (SettingId::LimitHighVolume, false.into()),
             (SettingId::LimitHighVolumeDbLimit, 90.into()),
             (SettingId::LimitHighVolumeRefreshRate, "RealTime".into()),
         ]);
+        assert!(
+            device
+                .inner()
+                .setting(&SettingId::ManualNoiseCanceling)
+                .is_none()
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -389,6 +397,10 @@ mod tests {
             SettingId::WearingDetection,
             SettingId::SoundLeakCompensation,
             SettingId::GamingMode,
+            SettingId::ManualNoiseCanceling,
+            SettingId::TransportationMode,
+            SettingId::WindNoiseSuppression,
+            SettingId::WindNoiseDetected,
         ] {
             assert!(
                 device.inner().setting(&setting_id).is_none(),
@@ -400,12 +412,63 @@ mod tests {
             (SettingId::AmbientSoundMode, "Normal".into()),
             (SettingId::TransparencyMode, "VocalMode".into()),
             (SettingId::NoiseCancelingMode, "Adaptive".into()),
-            (SettingId::ManualNoiseCanceling, 1.into()),
             (SettingId::AutoPowerOff, "30m".into()),
             (SettingId::LimitHighVolume, false.into()),
             (SettingId::LimitHighVolumeDbLimit, 90.into()),
             (SettingId::LimitHighVolumeRefreshRate, "RealTime".into()),
         ]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_d1204_sound_mode_write_surface_is_limited_to_verified_fields() {
+        let device = TestSoundcoreDevice::new(
+            super::device_registry,
+            DeviceModel::SoundcoreD1204,
+            HashMap::from([(
+                packet::Command([1, 1]),
+                packet::Inbound::new(
+                    packet::Command([1, 1]),
+                    vec![
+                        1, 1, 1, 2, 1, 1, 3, 2, 0, 98, 4, 2, 0, 96, 5, 5, 48, 53, 46, 52, 48, 6, 5,
+                        48, 53, 46, 52, 48, 7, 17, 49, 50, 48, 52, 48, 48, 48, 48, 48, 48, 48, 48,
+                        48, 48, 48, 48, 0, 8, 2, 0, 100, 36, 3, 2, 0, 1, 37, 2, 5, 1,
+                    ],
+                ),
+            )]),
+            SoundcoreDeviceConfig::default(),
+        )
+        .await;
+
+        for setting_id in [SettingId::AmbientSoundMode, SettingId::TransparencyMode] {
+            let setting = device
+                .inner()
+                .setting(&setting_id)
+                .expect("verified D1204 sound mode setting should be exposed");
+            assert!(
+                setting.mode().is_writable(),
+                "{setting_id} should remain writable on D1204"
+            );
+        }
+
+        let noise_canceling_mode = device
+            .inner()
+            .setting(&SettingId::NoiseCancelingMode)
+            .expect("D1204 should expose the parsed noise-canceling mode read-only");
+        assert!(!noise_canceling_mode.mode().is_writable());
+        assert!(noise_canceling_mode.mode().is_readable());
+        assert_eq!(Value::from(noise_canceling_mode), Value::from("Adaptive"));
+
+        for setting_id in [
+            SettingId::ManualNoiseCanceling,
+            SettingId::TransportationMode,
+            SettingId::WindNoiseSuppression,
+            SettingId::WindNoiseDetected,
+        ] {
+            assert!(
+                device.inner().setting(&setting_id).is_none(),
+                "{setting_id} should stay hidden on D1204 until packet writes are proven"
+            );
+        }
     }
 
     #[tokio::test(start_paused = true)]

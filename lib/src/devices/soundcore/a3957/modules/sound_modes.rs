@@ -3,7 +3,7 @@ mod setting_handler;
 use std::sync::Arc;
 
 use openscq30_lib_has::Has;
-use setting_handler::SoundModesSettingHandler;
+use setting_handler::{D1204SoundModesSettingHandler, SoundModesSettingHandler};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use crate::{
@@ -36,6 +36,12 @@ where
     pub fn add_a3957_sound_modes(&mut self, packet_io: Arc<PacketIOController>) {
         self.setting_manager
             .add_handler(CategoryId::SoundModes, SoundModesSettingHandler);
+        self.add_partial_sound_modes_v2_with_migration(packet_io);
+    }
+
+    pub fn add_d1204_sound_modes(&mut self, packet_io: Arc<PacketIOController>) {
+        self.setting_manager
+            .add_handler(CategoryId::SoundModes, D1204SoundModesSettingHandler);
         self.add_partial_sound_modes_v2_with_migration(packet_io);
     }
 }

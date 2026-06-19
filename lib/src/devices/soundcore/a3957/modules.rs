@@ -15,4 +15,10 @@ where
         self.module_collection()
             .add_a3957_sound_modes(packet_io_controller);
     }
+
+    pub fn d1204_sound_modes(&mut self) {
+        let packet_io_controller = self.packet_io_controller().clone();
+        self.module_collection()
+            .add_d1204_sound_modes(packet_io_controller);
+    }
 }
