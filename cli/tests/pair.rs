@@ -73,6 +73,37 @@ fn add_demo_device() {
 }
 
 #[test]
+fn add_d1204_device() {
+    let dir = tempdir().unwrap();
+    assert_cmd_snapshot!(
+        cli(dir.path())
+            .arg("paired-devices")
+            .arg("add")
+            .arg("--mac-address")
+            .arg("00:00:00:00:00:00")
+            .arg("--model")
+            .arg("SoundcoreD1204"),
+            @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Paired
+
+    ----- stderr -----
+    "
+    );
+    assert_cmd_snapshot!(cli(dir.path()).arg("paired-devices").arg("list"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Device Model  	MAC Address      	Demo Mode
+    SoundcoreD1204	00:00:00:00:00:00	No       
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn remove_device() {
     let dir = tempdir().unwrap();
     assert_cmd_snapshot!(
