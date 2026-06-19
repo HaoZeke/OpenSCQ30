@@ -257,8 +257,8 @@ impl A3957StateUpdatePacket {
                 low_battery_prompt: Default::default(),
                 ldac: Default::default(),
                 dual_connections_enabled: false,
-                auto_power_off: Default::default(),
-                limit_high_volume: Default::default(),
+                auto_power_off: d1204_auto_power_off(&fields),
+                limit_high_volume: d1204_limit_high_volume(&fields),
                 immersive_experience: Default::default(),
                 sound_leak_compensation: Default::default(),
                 wearing_detection: Default::default(),
@@ -369,19 +369,28 @@ fn d1204_serial_number<'a, E: ParseError<&'a [u8]>>(
 
 fn d1204_sound_modes(fields: &HashMap<u8, &[u8]>) -> a3957::structures::SoundModes {
     let mut sound_modes = a3957::structures::SoundModes::default();
-    if let Some(sound_mode) = fields
-        .get(&36)
-        .and_then(|bytes| bytes.first())
-        .and_then(|id| common::structures::AmbientSoundMode::from_id(*id))
-    {
-        sound_modes.ambient_sound_mode = sound_mode;
+    if let Some(bytes) = fields.get(&36) {
+        if let Some(sound_mode) = bytes
+            .first()
+            .and_then(|id| common::structures::AmbientSoundMode::from_id(*id))
+        {
+            sound_modes.ambient_sound_mode = sound_mode;
+        }
+        if let Some(transparency_mode) = bytes
+            .get(2)
+            .and_then(|id| common::structures::TransparencyMode::from_id(*id))
+        {
+            sound_modes.transparency_mode = transparency_mode;
+        }
     }
     if let Some(transparency_mode) = fields
         .get(&38)
         .and_then(|bytes| bytes.first())
         .and_then(|id| common::structures::TransparencyMode::from_id(*id))
     {
-        sound_modes.transparency_mode = transparency_mode;
+        if !fields.get(&36).is_some_and(|bytes| bytes.len() >= 3) {
+            sound_modes.transparency_mode = transparency_mode;
+        }
     }
     if let Some(bytes) = fields.get(&37) {
         if let Some(manual_level) = bytes.first().copied() {
@@ -396,6 +405,34 @@ fn d1204_sound_modes(fields: &HashMap<u8, &[u8]>) -> a3957::structures::SoundMod
         }
     }
     sound_modes
+}
+
+fn d1204_auto_power_off(fields: &HashMap<u8, &[u8]>) -> common::structures::AutoPowerOff {
+    fields
+        .get(&25)
+        .and_then(|bytes| {
+            Some(common::structures::AutoPowerOff {
+                is_enabled: bytes.first().copied()? != 0,
+                duration: common::structures::AutoPowerOffDurationIndex(*bytes.get(1)?),
+            })
+        })
+        .unwrap_or_default()
+}
+
+fn d1204_limit_high_volume(fields: &HashMap<u8, &[u8]>) -> common::structures::LimitHighVolume {
+    fields
+        .get(&39)
+        .and_then(|bytes| {
+            Some(common::structures::LimitHighVolume {
+                enabled: bytes.first().copied()? != 0,
+                db_limit: *bytes.get(1)?,
+                refresh_rate: common::structures::DecibelReadingRefreshRate::from_repr(
+                    *bytes.get(2)?,
+                )
+                .unwrap_or_default(),
+            })
+        })
+        .unwrap_or_default()
 }
 
 impl ToPacket for A3957StateUpdatePacket {

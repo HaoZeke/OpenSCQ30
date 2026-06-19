@@ -280,4 +280,37 @@ mod tests {
         assert_eq!(value, "Adaptive");
         assert!(setting.options.iter().any(|option| option == "Adaptive"));
     }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_d1204_tlv_fields_drive_phone_profile_settings() {
+        let device = TestSoundcoreDevice::new(
+            super::device_registry,
+            DeviceModel::SoundcoreD1204,
+            HashMap::from([(
+                packet::Command([1, 1]),
+                packet::Inbound::new(
+                    packet::Command([1, 1]),
+                    vec![
+                        1, 1, 1, 2, 1, 1, 3, 2, 0, 98, 4, 2, 0, 96, 5, 5, 48, 53, 46, 52, 48, 6, 5,
+                        48, 53, 46, 52, 48, 7, 17, 49, 50, 48, 52, 48, 48, 48, 48, 48, 48, 48, 48,
+                        48, 48, 48, 48, 0, 8, 2, 0, 100, 25, 2, 1, 2, 36, 3, 2, 0, 1, 37, 2, 1, 1,
+                        38, 2, 0, 0, 39, 3, 0, 90, 0,
+                    ],
+                ),
+            )]),
+            SoundcoreDeviceConfig::default(),
+        )
+        .await;
+
+        device.assert_setting_values([
+            (SettingId::AmbientSoundMode, "Normal".into()),
+            (SettingId::TransparencyMode, "VocalMode".into()),
+            (SettingId::NoiseCancelingMode, "Adaptive".into()),
+            (SettingId::ManualNoiseCanceling, 1.into()),
+            (SettingId::AutoPowerOff, "30m".into()),
+            (SettingId::LimitHighVolume, false.into()),
+            (SettingId::LimitHighVolumeDbLimit, 90.into()),
+            (SettingId::LimitHighVolumeRefreshRate, "RealTime".into()),
+        ]);
+    }
 }
