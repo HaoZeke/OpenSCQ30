@@ -172,6 +172,7 @@ dual-connections = Çift Bağlantılar
 dual-connections-devices = Çift Bağlantı Aygıtları
 soundcore-a3952 = Soundcore Liberty 3 Pro
 soundcore-a3957 = Soundcore Liberty 5
+soundcore-d1204 = Soundcore Liberty 5 Pro Max
 anc-personalized-to-ear-canal = Kulak Kanalı için Kişiselliştirilmiş Aktif Gürültü Engelleme
 power-off = Güçü Kapat
 side-tone = Yan Ses

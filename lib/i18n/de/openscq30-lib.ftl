@@ -137,3 +137,4 @@ soundcore-a3949 = Soundcore P20i / P25i / R50i
 soundcore-a3952 = Soundcore Liberty 3 Pro
 soundcore-a3955 = Soundcore P40i
 soundcore-a3957 = Soundcore Liberty 5
+soundcore-d1204 = Soundcore Liberty 5 Pro Max

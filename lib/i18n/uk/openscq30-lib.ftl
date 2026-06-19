@@ -23,6 +23,7 @@ soundcore-a3935 = Soundcore Life A2 NC
 soundcore-a3959 = Soundcore P30i / R50i NC
 soundcore-a3955 = Soundcore P40i
 soundcore-a3957 = Soundcore Liberty 5
+soundcore-d1204 = Soundcore Liberty 5 Pro Max
 soundcore-development = Soundcore Інформація для розробників
 general = Загальне
 sound-modes = Звукові режими

@@ -54,6 +54,7 @@ pub enum DeviceModel {
     SoundcoreA3935,
     SoundcoreA3955,
     SoundcoreA3957,
+    SoundcoreD1204,
     SoundcoreA3959,
     SoundcoreA3968,
     SoundcoreA3947,
@@ -108,7 +109,9 @@ impl DeviceModel {
             Self::SoundcoreA3951 => new_soundcore_device!(soundcore::a3951),
             Self::SoundcoreA3952 => new_soundcore_device!(soundcore::a3952),
             Self::SoundcoreA3955 => new_soundcore_device!(soundcore::a3955),
-            Self::SoundcoreA3957 => new_soundcore_device!(soundcore::a3957),
+            Self::SoundcoreA3957 | Self::SoundcoreD1204 => {
+                new_soundcore_device!(soundcore::a3957)
+            }
             Self::SoundcoreA3959 => new_soundcore_device!(soundcore::a3959),
             Self::SoundcoreA3968 => new_soundcore_device!(soundcore::a3968),
             Self::SoundcoreDevelopment => new_soundcore_device!(soundcore::development),
@@ -156,7 +159,9 @@ impl DeviceModel {
             Self::SoundcoreA3951 => new_soundcore_device!(soundcore::a3951),
             Self::SoundcoreA3952 => new_soundcore_device!(soundcore::a3952),
             Self::SoundcoreA3955 => new_soundcore_device!(soundcore::a3955),
-            Self::SoundcoreA3957 => new_soundcore_device!(soundcore::a3957),
+            Self::SoundcoreA3957 | Self::SoundcoreD1204 => {
+                new_soundcore_device!(soundcore::a3957)
+            }
             Self::SoundcoreA3959 => new_soundcore_device!(soundcore::a3959),
             Self::SoundcoreA3968 => new_soundcore_device!(soundcore::a3968),
             Self::SoundcoreDevelopment => new_soundcore_device!(soundcore::development),

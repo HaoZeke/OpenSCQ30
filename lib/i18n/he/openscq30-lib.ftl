@@ -180,6 +180,7 @@ charging = טעינה
 not-charging = לא בטעינה
 serial-number = מספר סידורי
 soundcore-a3957 = Soundcore Liberty 5
+soundcore-d1204 = Soundcore Liberty 5 Pro Max
 power-off = כיבוי
 enabled = מופעל
 pressure-sensitivity = רגישות ללחץ
