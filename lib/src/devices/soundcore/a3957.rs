@@ -41,31 +41,39 @@ soundcore_device!(
         ))
     },
     async |builder| {
+        let is_d1204 = builder.device_model() == crate::devices::DeviceModel::SoundcoreD1204;
+
         builder.module_collection().add_state_update();
         builder.a3957_sound_modes();
         builder
             .equalizer_with_custom_hear_id_tws(equalizer::common_settings())
             .await;
-        builder.button_configuration(&BUTTON_CONFIGURATION_SETTINGS);
-        builder.ambient_sound_mode_cycle();
-        builder.reset_button_configuration::<packets::inbound::A3957StateUpdatePacket>(
-            RequestState.to_packet(),
-        );
+        if !is_d1204 {
+            builder.button_configuration(&BUTTON_CONFIGURATION_SETTINGS);
+            builder.ambient_sound_mode_cycle();
+            builder.reset_button_configuration::<packets::inbound::A3957StateUpdatePacket>(
+                RequestState.to_packet(),
+            );
+        }
 
         builder.limit_high_volume();
 
-        builder.dual_connections();
+        if !is_d1204 {
+            builder.dual_connections();
+            builder.ldac();
+        }
 
-        builder.ldac();
         builder.auto_power_off(
             common::modules::auto_power_off::AutoPowerOffDuration::ten_twenty_thirty_sixty(),
         );
-        builder.touch_tone();
-        builder.low_battery_prompt();
-        builder.wearing_tone();
-        builder.wearing_detection();
-        builder.sound_leak_compensation();
-        builder.gaming_mode();
+        if !is_d1204 {
+            builder.touch_tone();
+            builder.low_battery_prompt();
+            builder.wearing_tone();
+            builder.wearing_detection();
+            builder.sound_leak_compensation();
+            builder.gaming_mode();
+        }
 
         builder.tws_status();
         builder.dual_battery_custom(common::modules::dual_battery::DualBatteryConfiguration {
@@ -301,6 +309,68 @@ mod tests {
             SoundcoreDeviceConfig::default(),
         )
         .await;
+
+        device.assert_setting_values([
+            (SettingId::AmbientSoundMode, "Normal".into()),
+            (SettingId::TransparencyMode, "VocalMode".into()),
+            (SettingId::NoiseCancelingMode, "Adaptive".into()),
+            (SettingId::ManualNoiseCanceling, 1.into()),
+            (SettingId::AutoPowerOff, "30m".into()),
+            (SettingId::LimitHighVolume, false.into()),
+            (SettingId::LimitHighVolumeDbLimit, 90.into()),
+            (SettingId::LimitHighVolumeRefreshRate, "RealTime".into()),
+        ]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_d1204_hides_unmapped_a3957_controls() {
+        let device = TestSoundcoreDevice::new(
+            super::device_registry,
+            DeviceModel::SoundcoreD1204,
+            HashMap::from([(
+                packet::Command([1, 1]),
+                packet::Inbound::new(
+                    packet::Command([1, 1]),
+                    vec![
+                        1, 1, 1, 2, 1, 1, 3, 2, 0, 98, 4, 2, 0, 96, 5, 5, 48, 53, 46, 52, 48, 6, 5,
+                        48, 53, 46, 52, 48, 7, 17, 49, 50, 48, 52, 48, 48, 48, 48, 48, 48, 48, 48,
+                        48, 48, 48, 48, 0, 8, 2, 0, 100, 25, 2, 1, 2, 36, 3, 2, 0, 1, 37, 2, 1, 1,
+                        38, 2, 0, 0, 39, 3, 0, 90, 0, 42, 1, 1, 48, 1, 2, 49, 1, 0, 50, 2, 0, 1,
+                        52, 1, 0, 53, 1, 255, 54, 2, 1, 1, 68, 1, 0,
+                    ],
+                ),
+            )]),
+            SoundcoreDeviceConfig::default(),
+        )
+        .await;
+
+        for setting_id in [
+            SettingId::Ldac,
+            SettingId::DualConnections,
+            SettingId::LeftSinglePress,
+            SettingId::RightSinglePress,
+            SettingId::LeftDoublePress,
+            SettingId::RightDoublePress,
+            SettingId::LeftTriplePress,
+            SettingId::RightTriplePress,
+            SettingId::LeftLongPress,
+            SettingId::RightLongPress,
+            SettingId::NormalModeInCycle,
+            SettingId::TransparencyModeInCycle,
+            SettingId::NoiseCancelingModeInCycle,
+            SettingId::ResetButtonsToDefault,
+            SettingId::TouchTone,
+            SettingId::LowBatteryPrompt,
+            SettingId::WearingTone,
+            SettingId::WearingDetection,
+            SettingId::SoundLeakCompensation,
+            SettingId::GamingMode,
+        ] {
+            assert!(
+                device.inner().setting(&setting_id).is_none(),
+                "{setting_id} should not be exposed for D1204 without packet evidence"
+            );
+        }
 
         device.assert_setting_values([
             (SettingId::AmbientSoundMode, "Normal".into()),
