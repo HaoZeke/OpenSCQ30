@@ -669,6 +669,14 @@ where
             .add_dual_connections(self.packet_io_controller.clone());
     }
 
+    pub fn dual_connections_devices_read_only(&mut self)
+    where
+        StateType: Has<DualConnections>,
+    {
+        self.module_collection
+            .add_dual_connections_devices_read_only();
+    }
+
     flag!(TouchTone);
     flag!(GamingMode);
     flag!(SoundLeakCompensation);

@@ -101,6 +101,7 @@ impl Update<A3957StateUpdatePacket> for A3957State {
             low_battery_prompt,
             ldac,
             dual_connections_enabled,
+            supports_dual_connections_device_list: _,
             auto_power_off,
             limit_high_volume,
             immersive_experience,

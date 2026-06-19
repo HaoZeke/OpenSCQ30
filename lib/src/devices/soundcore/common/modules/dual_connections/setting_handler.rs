@@ -9,14 +9,16 @@ use crate::{
     api::settings::{Setting, SettingId, Value},
     devices::soundcore::common::{
         settings_manager::{SettingHandler, SettingHandlerError, SettingHandlerResult},
-        structures::DualConnections,
+        structures::{DualConnections, DualConnectionsDevice},
     },
+    i18n::fl,
     settings,
 };
 
 use super::DualConnectionsSetting;
 
 pub struct DualConnectionsSettingHandler;
+pub struct ReadOnlyDualConnectionsDevicesSettingHandler;
 
 #[async_trait]
 impl<T> SettingHandler<T> for DualConnectionsSettingHandler
@@ -40,6 +42,50 @@ where
     ) -> SettingHandlerResult<()> {
         let dual_connections = state.get_mut();
         set_inner(dual_connections, setting_id, value)
+    }
+}
+
+#[async_trait]
+impl<T> SettingHandler<T> for ReadOnlyDualConnectionsDevicesSettingHandler
+where
+    T: Has<DualConnections> + Send,
+{
+    fn settings(&self) -> Vec<SettingId> {
+        vec![SettingId::DualConnectionsDevices]
+    }
+
+    fn get(&self, state: &T, setting_id: &SettingId) -> Option<Setting> {
+        if *setting_id != SettingId::DualConnectionsDevices {
+            return None;
+        }
+
+        let dual_connections = state.get();
+        let connected = fl!("connected");
+        let disconnected = fl!("disconnected");
+        let none = fl!("none");
+        Some(Setting::Information {
+            value: format_dual_connection_devices(
+                &dual_connections.devices,
+                "connected",
+                "disconnected",
+                "none",
+            ),
+            translated_value: format_dual_connection_devices(
+                &dual_connections.devices,
+                &connected,
+                &disconnected,
+                &none,
+            ),
+        })
+    }
+
+    async fn set(
+        &self,
+        _state: &mut T,
+        _setting_id: &SettingId,
+        _value: Value,
+    ) -> SettingHandlerResult<()> {
+        Err(SettingHandlerError::ReadOnly)
     }
 }
 
@@ -109,6 +155,35 @@ fn set_inner(
         },
     }
     Ok(())
+}
+
+fn format_dual_connection_devices(
+    devices: &[DualConnectionsDevice],
+    connected: &str,
+    disconnected: &str,
+    none: &str,
+) -> String {
+    if devices.is_empty() {
+        return none.to_owned();
+    }
+
+    devices
+        .iter()
+        .map(|device| {
+            let display_name = if device.name.is_empty() {
+                device.mac_address.to_string()
+            } else {
+                device.name.clone()
+            };
+            let status = if device.is_connected {
+                connected
+            } else {
+                disconnected
+            };
+            format!("{display_name} ({status})")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[tracing::instrument(level = "warn")]

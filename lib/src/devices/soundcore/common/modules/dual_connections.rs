@@ -45,6 +45,17 @@ where
                 packet_io,
             )));
     }
+
+    pub fn add_dual_connections_devices_read_only(&mut self) {
+        self.packet_handlers.set_handler(
+            packet_handler::DualConnectionsDevicePacketHandler::COMMAND,
+            Box::new(packet_handler::DualConnectionsDevicePacketHandler),
+        );
+        self.setting_manager.add_handler(
+            CategoryId::DualConnections,
+            setting_handler::ReadOnlyDualConnectionsDevicesSettingHandler,
+        );
+    }
 }
 
 pub async fn take_dual_connection_devices(

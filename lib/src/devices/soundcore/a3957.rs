@@ -30,7 +30,9 @@ soundcore_device!(
             .send_with_response(&RequestState.to_packet())
             .await?
             .try_to_packet()?;
-        let dual_connections_devices = if state_update_packet.dual_connections_enabled {
+        let dual_connections_devices = if state_update_packet.dual_connections_enabled
+            || state_update_packet.supports_dual_connections_device_list
+        {
             common::modules::dual_connections::take_dual_connection_devices(&packet_io).await?
         } else {
             Vec::new()
@@ -61,6 +63,8 @@ soundcore_device!(
         if !is_d1204 {
             builder.dual_connections();
             builder.ldac();
+        } else {
+            builder.dual_connections_devices_read_only();
         }
 
         builder.auto_power_off(
@@ -158,14 +162,34 @@ pub const BUTTON_CONFIGURATION_SETTINGS: ButtonConfigurationSettings<8, 4> =
 mod tests {
     use std::collections::HashMap;
 
+    use macaddr::MacAddr6;
+
     use crate::{
         DeviceModel,
         devices::soundcore::common::{
             device::{SoundcoreDeviceConfig, test_utils::TestSoundcoreDevice},
-            packet,
+            packet::{self, outbound::ToPacket},
+            structures::DualConnectionsDevice,
         },
         settings::{Setting, SettingId, Value},
     };
+
+    fn minimal_d1204_state_body() -> Vec<u8> {
+        let mut body = Vec::new();
+        let mut push_field = |tag: u8, value: &[u8]| {
+            body.push(tag);
+            body.push(value.len().try_into().unwrap());
+            body.extend_from_slice(value);
+        };
+
+        push_field(3, &[0, 98]);
+        push_field(4, &[0, 96]);
+        push_field(5, b"05.40");
+        push_field(6, b"05.40");
+        push_field(7, b"1204000000000000\0");
+        push_field(8, &[0, 100]);
+        body
+    }
 
     #[tokio::test(start_paused = true)]
     async fn test_with_liberty5_packet_from_issue_226() {
@@ -382,5 +406,58 @@ mod tests {
             (SettingId::LimitHighVolumeDbLimit, 90.into()),
             (SettingId::LimitHighVolumeRefreshRate, "RealTime".into()),
         ]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_d1204_exposes_dual_connections_devices_read_only() {
+        let device = TestSoundcoreDevice::new(
+            super::device_registry,
+            DeviceModel::SoundcoreD1204,
+            HashMap::from([
+                (
+                    packet::Command([1, 1]),
+                    packet::Inbound::new(packet::Command([1, 1]), minimal_d1204_state_body()),
+                ),
+                (
+                    packet::Command([0x0b, 0x01]),
+                    packet::inbound::DualConnectionsDevicePacket {
+                        total_packets: 1,
+                        current_packet_index: 1,
+                        devices: vec![
+                            DualConnectionsDevice {
+                                is_connected: true,
+                                mac_address: MacAddr6::new(0, 0, 0, 0, 0, 1),
+                                name: "Laptop".to_owned(),
+                            },
+                            DualConnectionsDevice {
+                                is_connected: false,
+                                mac_address: MacAddr6::new(0, 0, 0, 0, 0, 2),
+                                name: "Phone".to_owned(),
+                            },
+                        ],
+                    }
+                    .to_packet(),
+                ),
+            ]),
+            SoundcoreDeviceConfig::default(),
+        )
+        .await;
+
+        assert!(
+            device.inner().setting(&SettingId::DualConnections).is_none(),
+            "D1204 should not expose the writable dual-connections toggle without write-packet evidence"
+        );
+
+        let setting = device
+            .inner()
+            .setting(&SettingId::DualConnectionsDevices)
+            .expect("D1204 should expose paired dual-connection devices");
+        assert!(!setting.mode().is_writable());
+        assert!(setting.mode().is_readable());
+
+        let Setting::Information { value, .. } = setting else {
+            panic!("D1204 dual-connection devices should be read-only information");
+        };
+        assert_eq!(value, "Laptop (connected), Phone (disconnected)");
     }
 }
