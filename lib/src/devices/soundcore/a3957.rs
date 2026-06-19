@@ -444,7 +444,10 @@ mod tests {
         .await;
 
         assert!(
-            device.inner().setting(&SettingId::DualConnections).is_none(),
+            device
+                .inner()
+                .setting(&SettingId::DualConnections)
+                .is_none(),
             "D1204 should not expose the writable dual-connections toggle without write-packet evidence"
         );
 
