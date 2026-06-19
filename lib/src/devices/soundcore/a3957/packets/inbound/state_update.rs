@@ -1,11 +1,11 @@
-use std::iter;
+use std::{collections::HashMap, iter};
 
 use async_trait::async_trait;
 use nom::{
     IResult, Parser,
     bytes::complete::take,
     combinator::map,
-    error::{ContextError, ParseError, context},
+    error::{ContextError, ErrorKind, ParseError, context},
 };
 use tokio::sync::watch;
 
@@ -93,6 +93,14 @@ impl FromPacketBody for A3957StateUpdatePacket {
     type DirectionMarker = packet::InboundMarker;
 
     fn take<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], Self, E> {
+        Self::take_flat(input).or_else(|_: nom::Err<E>| Self::take_d1204_tlv(input))
+    }
+}
+
+impl A3957StateUpdatePacket {
+    fn take_flat<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
         input: &'a [u8],
     ) -> IResult<&'a [u8], Self, E> {
         context(
@@ -200,6 +208,194 @@ impl FromPacketBody for A3957StateUpdatePacket {
         )
         .parse_complete(input)
     }
+
+    fn take_d1204_tlv<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], Self, E> {
+        let (_, fields) = d1204_tlv_fields::<E>(input)?;
+        let left_battery = d1204_battery_level(d1204_field::<E>(&fields, 3, input)?);
+        let right_battery = d1204_battery_level(d1204_field::<E>(&fields, 4, input)?);
+        let left_firmware =
+            d1204_firmware_version::<E>(d1204_field::<E>(&fields, 5, input)?, input)?;
+        let right_firmware =
+            d1204_firmware_version::<E>(d1204_field::<E>(&fields, 6, input)?, input)?;
+        let serial_number = d1204_serial_number::<E>(d1204_field::<E>(&fields, 7, input)?, input)?;
+        let case_battery = d1204_battery_level(d1204_field::<E>(&fields, 8, input)?);
+
+        Ok((
+            &[],
+            Self {
+                tws_status: common::structures::TwsStatus {
+                    host_device: d1204_host_device(fields.get(&1).copied()),
+                    is_connected: d1204_bool(fields.get(&2).copied()),
+                },
+                dual_battery: common::structures::DualBattery {
+                    left: common::structures::SingleBattery {
+                        level: left_battery,
+                        is_charging: Default::default(),
+                    },
+                    right: common::structures::SingleBattery {
+                        level: right_battery,
+                        is_charging: Default::default(),
+                    },
+                },
+                dual_firmware_version: common::structures::DualFirmwareVersion::Both {
+                    left: left_firmware,
+                    right: right_firmware,
+                },
+                serial_number,
+                case_battery: common::structures::CaseBatteryLevel(case_battery),
+                equalizer_configuration: Default::default(),
+                age_range: Default::default(),
+                gender: Default::default(),
+                hear_id: Default::default(),
+                button_configuration: a3957::BUTTON_CONFIGURATION_SETTINGS
+                    .default_status_collection(),
+                ambient_sound_mode_cycle: Default::default(),
+                sound_modes: d1204_sound_modes(&fields),
+                wearing_tone: Default::default(),
+                low_battery_prompt: Default::default(),
+                ldac: Default::default(),
+                dual_connections_enabled: false,
+                auto_power_off: Default::default(),
+                limit_high_volume: Default::default(),
+                immersive_experience: Default::default(),
+                sound_leak_compensation: Default::default(),
+                wearing_detection: Default::default(),
+                touch_tone: Default::default(),
+                gaming_mode: Default::default(),
+                pressure_sensitivity: Default::default(),
+            },
+        ))
+    }
+}
+
+fn d1204_tlv_fields<'a, E: ParseError<&'a [u8]>>(
+    input: &'a [u8],
+) -> IResult<&'a [u8], HashMap<u8, &'a [u8]>, E> {
+    let mut rest = input;
+    let mut fields = HashMap::new();
+    while !rest.is_empty() {
+        if rest.len() < 2 {
+            return Err(nom::Err::Error(E::from_error_kind(input, ErrorKind::Eof)));
+        }
+        let tag = rest[0];
+        let len = usize::from(rest[1]);
+        rest = &rest[2..];
+        if rest.len() < len {
+            return Err(nom::Err::Error(E::from_error_kind(input, ErrorKind::Eof)));
+        }
+        let value = &rest[..len];
+        fields.insert(tag, value);
+        rest = &rest[len..];
+    }
+    Ok((rest, fields))
+}
+
+fn d1204_field<'a, E: ParseError<&'a [u8]>>(
+    fields: &HashMap<u8, &'a [u8]>,
+    tag: u8,
+    input: &'a [u8],
+) -> Result<&'a [u8], nom::Err<E>> {
+    fields
+        .get(&tag)
+        .copied()
+        .ok_or_else(|| nom::Err::Error(E::from_error_kind(input, ErrorKind::Tag)))
+}
+
+fn d1204_battery_level(input: &[u8]) -> common::structures::BatteryLevel {
+    let percent = input.last().copied().unwrap_or_default();
+    common::structures::BatteryLevel(percent.saturating_sub(1).saturating_div(10).min(9))
+}
+
+fn d1204_bool(input: Option<&[u8]>) -> bool {
+    input
+        .and_then(|bytes| bytes.last())
+        .copied()
+        .unwrap_or_default()
+        != 0
+}
+
+fn d1204_host_device(input: Option<&[u8]>) -> common::structures::HostDevice {
+    match input.and_then(|bytes| bytes.last()).copied() {
+        Some(1) => common::structures::HostDevice::Right,
+        _ => common::structures::HostDevice::Left,
+    }
+}
+
+fn d1204_firmware_version<'a, E: ParseError<&'a [u8]>>(
+    input: &[u8],
+    error_input: &'a [u8],
+) -> Result<common::structures::FirmwareVersion, nom::Err<E>> {
+    if input.len() != 5 || input[2] != b'.' {
+        return Err(nom::Err::Error(E::from_error_kind(
+            error_input,
+            ErrorKind::Tag,
+        )));
+    }
+    let major = d1204_two_digit_number::<E>(&input[0..2], error_input)?;
+    let minor = d1204_two_digit_number::<E>(&input[3..5], error_input)?;
+    Ok(common::structures::FirmwareVersion::new(major, minor))
+}
+
+fn d1204_two_digit_number<'a, E: ParseError<&'a [u8]>>(
+    input: &[u8],
+    error_input: &'a [u8],
+) -> Result<u8, nom::Err<E>> {
+    if input.len() != 2 || !input.iter().all(u8::is_ascii_digit) {
+        return Err(nom::Err::Error(E::from_error_kind(
+            error_input,
+            ErrorKind::Digit,
+        )));
+    }
+    Ok((input[0] - b'0') * 10 + input[1] - b'0')
+}
+
+fn d1204_serial_number<'a, E: ParseError<&'a [u8]>>(
+    input: &[u8],
+    error_input: &'a [u8],
+) -> Result<common::structures::SerialNumber, nom::Err<E>> {
+    let serial_bytes = input.strip_suffix(&[0]).unwrap_or(input);
+    let serial = std::str::from_utf8(serial_bytes)
+        .map_err(|_| nom::Err::Error(E::from_error_kind(error_input, ErrorKind::Char)))?;
+    if serial.is_empty() || !serial.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(nom::Err::Error(E::from_error_kind(
+            error_input,
+            ErrorKind::AlphaNumeric,
+        )));
+    }
+    Ok(common::structures::SerialNumber::from(serial))
+}
+
+fn d1204_sound_modes(fields: &HashMap<u8, &[u8]>) -> a3957::structures::SoundModes {
+    let mut sound_modes = a3957::structures::SoundModes::default();
+    if let Some(sound_mode) = fields
+        .get(&36)
+        .and_then(|bytes| bytes.first())
+        .and_then(|id| common::structures::AmbientSoundMode::from_id(*id))
+    {
+        sound_modes.ambient_sound_mode = sound_mode;
+    }
+    if let Some(transparency_mode) = fields
+        .get(&38)
+        .and_then(|bytes| bytes.first())
+        .and_then(|id| common::structures::TransparencyMode::from_id(*id))
+    {
+        sound_modes.transparency_mode = transparency_mode;
+    }
+    if let Some(bytes) = fields.get(&37) {
+        if let Some(manual_level) = bytes.first().copied() {
+            sound_modes.manual_noise_canceling =
+                a3957::structures::ManualNoiseCanceling::new(manual_level);
+        }
+        if let Some(noise_canceling_mode) = bytes
+            .get(1)
+            .and_then(|mode| a3957::structures::NoiseCancelingMode::from_repr(*mode))
+        {
+            sound_modes.noise_canceling_mode = noise_canceling_mode;
+        }
+    }
+    sound_modes
 }
 
 impl ToPacket for A3957StateUpdatePacket {

@@ -228,4 +228,46 @@ mod tests {
             // (SettingId::EarbudPressureSensitivity, "Medium".into()),
         ]);
     }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_with_liberty5_pro_max_d1204_packet() {
+        let device = TestSoundcoreDevice::new(
+            super::device_registry,
+            DeviceModel::SoundcoreD1204,
+            HashMap::from([(
+                packet::Command([1, 1]),
+                packet::Inbound::new(
+                    packet::Command([1, 1]),
+                    vec![
+                        1, 1, 1, 2, 1, 1, 3, 2, 0, 98, 4, 2, 0, 96, 5, 5, 48, 53, 46, 52, 48, 6, 5,
+                        48, 53, 46, 52, 48, 7, 17, 49, 50, 48, 52, 48, 48, 48, 48, 48, 48, 48, 48,
+                        48, 48, 48, 48, 0, 8, 2, 0, 100, 9, 5, 48, 49, 46, 51, 56, 10, 1, 49, 11,
+                        2, 0, 0, 12, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 2, 15, 15, 15, 2, 3, 6, 17, 2,
+                        15, 15, 19, 2, 4, 4, 21, 2, 0, 0, 23, 2, 1, 1, 14, 2, 15, 15, 16, 2, 6, 6,
+                        18, 2, 15, 15, 20, 2, 4, 4, 22, 2, 0, 0, 24, 2, 1, 1, 25, 2, 1, 2, 42, 1,
+                        1, 26, 1, 255, 27, 3, 8, 9, 0, 28, 1, 1, 35, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 36, 3, 2, 0, 0, 37, 2, 5, 1, 38, 2, 0, 0, 39, 3, 0,
+                        90, 0, 41, 6, 0, 127, 29, 7, 104, 63, 44, 3, 0, 0, 0, 46, 1, 99, 48, 1, 2,
+                        49, 1, 0, 50, 2, 0, 1, 51, 6, 0, 3, 106, 53, 57, 66, 52, 1, 0, 53, 1, 255,
+                        54, 2, 1, 1, 68, 1, 0,
+                    ],
+                ),
+            )]),
+            SoundcoreDeviceConfig::default(),
+        )
+        .await;
+
+        device.assert_setting_values([
+            (SettingId::FirmwareVersionLeft, "05.40".into()),
+            (SettingId::FirmwareVersionRight, "05.40".into()),
+            (SettingId::SerialNumber, "1204000000000000".into()),
+            (SettingId::BatteryLevelLeft, "10/10".into()),
+            (SettingId::BatteryLevelRight, "10/10".into()),
+            (SettingId::CaseBatteryLevel, "10/10".into()),
+        ]);
+    }
 }
