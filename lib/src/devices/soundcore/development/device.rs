@@ -202,10 +202,7 @@ mod tests {
             settings::{SettingId, Value},
         },
         connection_backend::mock::rfcomm::MockRfcommBackend,
-        devices::soundcore::common::packet::{
-            self, ChecksumKind, Command,
-            outbound::RequestState,
-        },
+        devices::soundcore::common::packet::{self, ChecksumKind, Command, outbound::RequestState},
     };
 
     use super::SoundcoreDevelopmentDeviceRegistry;
@@ -239,8 +236,7 @@ mod tests {
         let (outbound_sender, mut outbound_receiver) = mpsc::channel(100);
         inbound_sender
             .send(
-                packet::Inbound::new(RequestState::COMMAND, vec![0x00])
-                    .bytes(ChecksumKind::Suffix),
+                packet::Inbound::new(RequestState::COMMAND, vec![0x00]).bytes(ChecksumKind::Suffix),
             )
             .await
             .unwrap();
