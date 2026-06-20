@@ -127,10 +127,14 @@ where
             SettingId::TransparencyMode => Some(Setting::select_from_enum_all_variants(
                 sound_modes.transparency_mode,
             )),
-            // The D1204 supports adaptive and manual noise canceling, but not the
-            // A3957 transportation mode, so only offer the two it accepts.
+            // The D1204 noise-canceling sub-modes: Manual (with level), Adaptive,
+            // and Transportation (the app's "Commuter Multimodal").
             SettingId::NoiseCancelingMode => Some(Setting::select_from_enum(
-                &[NoiseCancelingMode::Manual, NoiseCancelingMode::Adaptive],
+                &[
+                    NoiseCancelingMode::Manual,
+                    NoiseCancelingMode::Adaptive,
+                    NoiseCancelingMode::Transportation,
+                ],
                 sound_modes.noise_canceling_mode,
             )),
             SettingId::ManualNoiseCanceling => Some(Setting::I32Range {

@@ -67,17 +67,20 @@ where
 ///   byte3 = manual noise-canceling level (1..=5)
 ///   byte4 = 0x11 constant stamped by the app on every sound-mode write
 pub fn d1204_sound_modes_body(sound_modes: &SoundModes) -> Vec<u8> {
-    let mode = match sound_modes.ambient_sound_mode {
-        AmbientSoundMode::Transparency => 1,
-        AmbientSoundMode::Normal => 2,
+    // byte0 = top mode, byte1 = noise-canceling sub-mode selector.
+    let (mode, sub_mode) = match sound_modes.ambient_sound_mode {
+        AmbientSoundMode::Transparency => (1, 0),
+        AmbientSoundMode::Normal => (2, 0),
         AmbientSoundMode::NoiseCanceling => match sound_modes.noise_canceling_mode {
-            NoiseCancelingMode::Adaptive => 3,
-            _ => 0,
+            NoiseCancelingMode::Adaptive => (3, 0),
+            // The official app labels byte1 == 2 "Commuter Multimodal".
+            NoiseCancelingMode::Transportation => (0, 2),
+            NoiseCancelingMode::Manual => (0, 0),
         },
     };
     vec![
         mode,
-        0,
+        sub_mode,
         sound_modes.transparency_mode.id(),
         sound_modes.manual_noise_canceling.inner(),
         0x11,
@@ -150,6 +153,14 @@ mod tests {
         sound_modes.noise_canceling_mode = NoiseCancelingMode::Adaptive;
         assert_eq!(d1204_sound_modes_body(&sound_modes)[0], 3);
 
+        // Commuter Multimodal: top mode stays NoiseCanceling (byte0 == 0),
+        // sub-mode byte1 == 2.
+        sound_modes.noise_canceling_mode = NoiseCancelingMode::Transportation;
+        let commuter = d1204_sound_modes_body(&sound_modes);
+        assert_eq!(commuter[0], 0);
+        assert_eq!(commuter[1], 2);
+
+        sound_modes.noise_canceling_mode = NoiseCancelingMode::Manual;
         sound_modes.ambient_sound_mode = AmbientSoundMode::Normal;
         assert_eq!(d1204_sound_modes_body(&sound_modes)[0], 2);
 

@@ -48,6 +48,7 @@ soundcore_device!(
         builder.module_collection().add_state_update();
         if is_d1204 {
             builder.d1204_sound_modes();
+            builder.d1204_equalizer();
         } else {
             builder.a3957_sound_modes();
             builder
@@ -394,7 +395,6 @@ mod tests {
             SettingId::TransportationMode,
             SettingId::WindNoiseSuppression,
             SettingId::WindNoiseDetected,
-            SettingId::PresetEqualizerProfile,
             SettingId::CustomEqualizerProfile,
             SettingId::VolumeAdjustments,
             SettingId::ImportCustomEqualizerProfiles,

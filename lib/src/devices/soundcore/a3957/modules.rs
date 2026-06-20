@@ -2,8 +2,9 @@ use openscq30_lib_has::Has;
 
 use crate::devices::soundcore::common::device::SoundcoreDeviceBuilder;
 
-use super::structures::SoundModes;
+use super::structures::{D1204SelectedEqProfile, SoundModes};
 
+mod equalizer;
 mod sound_modes;
 
 impl<StateType> SoundcoreDeviceBuilder<StateType>
@@ -20,5 +21,16 @@ where
         let packet_io_controller = self.packet_io_controller().clone();
         self.module_collection()
             .add_d1204_sound_modes(packet_io_controller);
+    }
+}
+
+impl<StateType> SoundcoreDeviceBuilder<StateType>
+where
+    StateType: Has<D1204SelectedEqProfile> + Send + Sync + Clone + 'static,
+{
+    pub fn d1204_equalizer(&mut self) {
+        let packet_io_controller = self.packet_io_controller().clone();
+        self.module_collection()
+            .add_d1204_equalizer(packet_io_controller);
     }
 }

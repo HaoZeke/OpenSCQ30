@@ -383,8 +383,13 @@ fn d1204_sound_modes(fields: &HashMap<u8, &[u8]>) -> a3957::structures::SoundMod
                 2 => common::structures::AmbientSoundMode::Normal,
                 _ => common::structures::AmbientSoundMode::NoiseCanceling,
             };
+            // byte1 selects the noise-canceling sub-mode: 0 = Manual,
+            // 2 = Commuter Multimodal (mapped to Transportation).
+            let sub_mode = bytes.get(1).copied().unwrap_or(0);
             sound_modes.noise_canceling_mode = if mode_byte == 3 {
                 a3957::structures::NoiseCancelingMode::Adaptive
+            } else if sub_mode == 2 {
+                a3957::structures::NoiseCancelingMode::Transportation
             } else {
                 a3957::structures::NoiseCancelingMode::Manual
             };

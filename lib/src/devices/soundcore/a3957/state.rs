@@ -42,6 +42,7 @@ pub struct A3957State {
     gaming_mode: GamingMode,
     pressure_sensitivity: a3957::structures::PressureSensitivity,
     button_reset_pending: ResetButtonConfigurationPending,
+    d1204_eq_profile: a3957::structures::D1204SelectedEqProfile,
 }
 
 impl A3957State {
@@ -78,6 +79,7 @@ impl A3957State {
             gaming_mode: packet.gaming_mode,
             pressure_sensitivity: packet.pressure_sensitivity,
             button_reset_pending: ResetButtonConfigurationPending::default(),
+            d1204_eq_profile: a3957::structures::D1204SelectedEqProfile::default(),
         }
     }
 }
