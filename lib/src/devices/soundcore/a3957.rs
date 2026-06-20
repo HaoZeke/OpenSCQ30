@@ -309,11 +309,10 @@ mod tests {
         let noise_canceling_mode = device
             .inner()
             .setting(&SettingId::NoiseCancelingMode)
-            .unwrap();
-        let Setting::Information { value, .. } = noise_canceling_mode else {
-            panic!("D1204 noiseCancelingMode should be read-only information")
-        };
-        assert_eq!(value, "Adaptive");
+            .expect("D1204 should expose the writable noise-canceling mode");
+        assert!(noise_canceling_mode.mode().is_writable());
+        // tag36[0] == 2 (Normal) parses the noise-canceling sub-mode as Manual.
+        assert_eq!(Value::from(noise_canceling_mode), Value::from("Manual"));
     }
 
     #[tokio::test(start_paused = true)]
@@ -340,18 +339,13 @@ mod tests {
         device.assert_setting_values([
             (SettingId::AmbientSoundMode, "Normal".into()),
             (SettingId::TransparencyMode, "VocalMode".into()),
-            (SettingId::NoiseCancelingMode, "Adaptive".into()),
+            (SettingId::NoiseCancelingMode, "Manual".into()),
+            (SettingId::ManualNoiseCanceling, 1.into()),
             (SettingId::AutoPowerOff, "30m".into()),
             (SettingId::LimitHighVolume, false.into()),
             (SettingId::LimitHighVolumeDbLimit, 90.into()),
             (SettingId::LimitHighVolumeRefreshRate, "RealTime".into()),
         ]);
-        assert!(
-            device
-                .inner()
-                .setting(&SettingId::ManualNoiseCanceling)
-                .is_none()
-        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -397,7 +391,6 @@ mod tests {
             SettingId::WearingDetection,
             SettingId::SoundLeakCompensation,
             SettingId::GamingMode,
-            SettingId::ManualNoiseCanceling,
             SettingId::TransportationMode,
             SettingId::WindNoiseSuppression,
             SettingId::WindNoiseDetected,
@@ -417,7 +410,7 @@ mod tests {
         device.assert_setting_values([
             (SettingId::AmbientSoundMode, "Normal".into()),
             (SettingId::TransparencyMode, "VocalMode".into()),
-            (SettingId::NoiseCancelingMode, "Adaptive".into()),
+            (SettingId::NoiseCancelingMode, "Manual".into()),
             (SettingId::AutoPowerOff, "30m".into()),
             (SettingId::LimitHighVolume, false.into()),
             (SettingId::LimitHighVolumeDbLimit, 90.into()),
@@ -456,16 +449,24 @@ mod tests {
             );
         }
 
+        // The D1204 noise-canceling mode and manual level are writable: the
+        // official app's [06,81] body and the live device confirm both.
         let noise_canceling_mode = device
             .inner()
             .setting(&SettingId::NoiseCancelingMode)
-            .expect("D1204 should expose the parsed noise-canceling mode read-only");
-        assert!(!noise_canceling_mode.mode().is_writable());
-        assert!(noise_canceling_mode.mode().is_readable());
-        assert_eq!(Value::from(noise_canceling_mode), Value::from("Adaptive"));
+            .expect("D1204 should expose the writable noise-canceling mode");
+        assert!(noise_canceling_mode.mode().is_writable());
+        // tag36[0] == 2 (Normal) parses the noise-canceling sub-mode as Manual.
+        assert_eq!(Value::from(noise_canceling_mode), Value::from("Manual"));
+
+        let manual = device
+            .inner()
+            .setting(&SettingId::ManualNoiseCanceling)
+            .expect("D1204 should expose the writable manual noise-canceling level");
+        assert!(manual.mode().is_writable());
+        assert_eq!(Value::from(manual), Value::from(5));
 
         for setting_id in [
-            SettingId::ManualNoiseCanceling,
             SettingId::TransportationMode,
             SettingId::WindNoiseSuppression,
             SettingId::WindNoiseDetected,
@@ -531,5 +532,36 @@ mod tests {
             panic!("D1204 dual-connection devices should be read-only information");
         };
         assert_eq!(value, "Laptop (connected), Phone (disconnected)");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_d1204_reads_adaptive_noise_canceling_from_mode_byte() {
+        // tag36[0] == 3 is NoiseCanceling/Adaptive (verified against the live
+        // device). tag37[0] carries the manual level even while adaptive.
+        let mut body = minimal_d1204_state_body();
+        body.extend_from_slice(&[36, 3, 3, 0, 0, 37, 2, 2, 1]);
+
+        let device = TestSoundcoreDevice::new(
+            super::device_registry,
+            DeviceModel::SoundcoreD1204,
+            HashMap::from([(
+                packet::Command([1, 1]),
+                packet::Inbound::new(packet::Command([1, 1]), body),
+            )]),
+            SoundcoreDeviceConfig::default(),
+        )
+        .await;
+
+        device.assert_setting_values([
+            (SettingId::AmbientSoundMode, "NoiseCanceling".into()),
+            (SettingId::NoiseCancelingMode, "Adaptive".into()),
+            (SettingId::ManualNoiseCanceling, 2.into()),
+        ]);
+
+        let noise_canceling_mode = device
+            .inner()
+            .setting(&SettingId::NoiseCancelingMode)
+            .unwrap();
+        assert!(noise_canceling_mode.mode().is_writable());
     }
 }

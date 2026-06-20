@@ -374,11 +374,20 @@ fn d1204_serial_number<'a, E: ParseError<&'a [u8]>>(
 fn d1204_sound_modes(fields: &HashMap<u8, &[u8]>) -> a3957::structures::SoundModes {
     let mut sound_modes = a3957::structures::SoundModes::default();
     if let Some(bytes) = fields.get(&36) {
-        if let Some(sound_mode) = bytes
-            .first()
-            .and_then(|id| common::structures::AmbientSoundMode::from_id(*id))
-        {
-            sound_modes.ambient_sound_mode = sound_mode;
+        // D1204 tag36[0] is the combined mode selector:
+        //   0 = NoiseCanceling/Manual, 1 = Transparency, 2 = Normal,
+        //   3 = NoiseCanceling/Adaptive
+        if let Some(&mode_byte) = bytes.first() {
+            sound_modes.ambient_sound_mode = match mode_byte {
+                1 => common::structures::AmbientSoundMode::Transparency,
+                2 => common::structures::AmbientSoundMode::Normal,
+                _ => common::structures::AmbientSoundMode::NoiseCanceling,
+            };
+            sound_modes.noise_canceling_mode = if mode_byte == 3 {
+                a3957::structures::NoiseCancelingMode::Adaptive
+            } else {
+                a3957::structures::NoiseCancelingMode::Manual
+            };
         }
         if let Some(transparency_mode) = bytes
             .get(2)
@@ -396,17 +405,11 @@ fn d1204_sound_modes(fields: &HashMap<u8, &[u8]>) -> a3957::structures::SoundMod
             sound_modes.transparency_mode = transparency_mode;
         }
     }
-    if let Some(bytes) = fields.get(&37) {
-        if let Some(manual_level) = bytes.first().copied() {
-            sound_modes.manual_noise_canceling =
-                a3957::structures::ManualNoiseCanceling::new(manual_level);
-        }
-        if let Some(noise_canceling_mode) = bytes
-            .get(1)
-            .and_then(|mode| a3957::structures::NoiseCancelingMode::from_repr(*mode))
-        {
-            sound_modes.noise_canceling_mode = noise_canceling_mode;
-        }
+    // tag37[0] is the manual noise-canceling level. tag37[1] is not the mode
+    // (it stays 1 regardless), so the mode is taken from tag36[0] above.
+    if let Some(manual_level) = fields.get(&37).and_then(|bytes| bytes.first()).copied() {
+        sound_modes.manual_noise_canceling =
+            a3957::structures::ManualNoiseCanceling::new(manual_level);
     }
     sound_modes
 }

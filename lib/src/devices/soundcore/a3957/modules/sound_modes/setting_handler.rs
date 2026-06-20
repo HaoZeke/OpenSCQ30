@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 use crate::{
     api::settings::{self, Setting, SettingId, Value},
     devices::soundcore::{
-        a3957::structures::{ManualNoiseCanceling, SoundModes},
+        a3957::structures::{ManualNoiseCanceling, NoiseCancelingMode, SoundModes},
         common::settings_manager::{SettingHandler, SettingHandlerError, SettingHandlerResult},
     },
     i18n::fl,
@@ -114,6 +114,7 @@ where
             SettingId::AmbientSoundMode,
             SettingId::TransparencyMode,
             SettingId::NoiseCancelingMode,
+            SettingId::ManualNoiseCanceling,
         ]
     }
 
@@ -126,13 +127,19 @@ where
             SettingId::TransparencyMode => Some(Setting::select_from_enum_all_variants(
                 sound_modes.transparency_mode,
             )),
-            SettingId::NoiseCancelingMode => {
-                let value = sound_modes.noise_canceling_mode.to_string();
-                Some(Setting::Information {
-                    value: value.clone(),
-                    translated_value: value,
-                })
-            }
+            // The D1204 supports adaptive and manual noise canceling, but not the
+            // A3957 transportation mode, so only offer the two it accepts.
+            SettingId::NoiseCancelingMode => Some(Setting::select_from_enum(
+                &[NoiseCancelingMode::Manual, NoiseCancelingMode::Adaptive],
+                sound_modes.noise_canceling_mode,
+            )),
+            SettingId::ManualNoiseCanceling => Some(Setting::I32Range {
+                setting: settings::Range {
+                    range: 1..=5,
+                    step: 1,
+                },
+                value: sound_modes.manual_noise_canceling.inner().into(),
+            }),
             _ => None,
         }
     }
@@ -152,7 +159,15 @@ where
                 let sound_modes: &mut SoundModes = state.get_mut();
                 sound_modes.transparency_mode = value.try_as_enum_variant()?;
             }
-            SettingId::NoiseCancelingMode => return Err(SettingHandlerError::ReadOnly),
+            SettingId::NoiseCancelingMode => {
+                let sound_modes: &mut SoundModes = state.get_mut();
+                sound_modes.noise_canceling_mode = value.try_as_enum_variant()?;
+            }
+            SettingId::ManualNoiseCanceling => {
+                let sound_modes: &mut SoundModes = state.get_mut();
+                sound_modes.manual_noise_canceling =
+                    ManualNoiseCanceling::new(value.try_as_i32()? as u8);
+            }
             _ => return Err(SettingHandlerError::MissingData),
         }
         Ok(())
